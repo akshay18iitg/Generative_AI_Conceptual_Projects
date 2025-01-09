@@ -16,3 +16,22 @@ Chains - These help to organize LLMs, input prompt and their outputs and can hel
 
 
 Memory - This helps to maintain the context of conversation. 
+
+
+
+
+
+
+
+
+# Basic RAG 
+
+![IMG_0012](https://github.com/user-attachments/assets/0875eaae-2681-4d18-b90a-84a6fab212e7)
+
+
+
+
+
+
+
+
