@@ -105,3 +105,69 @@ Depending on the use case, it will make sense for the router to just choose one 
 
 
 
+# Parameter Efficient Fine-Tuning LLMs (Large Language Models)
+
+## LoRA (Low Rank Adaptation)
+LoRA is a training method designed to expedite the training process of large language models, all while reducing memory consumption. By introducing pairs of rank-decomposition weight matrices, known as update matrices, to the existing weights, LoRA focuses solely on training these new added weights. This approach offers several advantages:
+
+Preservation of pretrained Weights: LoRA maintains the frozen state of previously trained weights, minimizing the risk of catastrophic forgetting. This ensures that the model retains its existing knowledge while adapting to new data.
+Portability of trained weights: The rank-decomposition matrices used in LoRA have significantly fewer parameters compared to the original model. This characteristic allows the trained LoRA weights to be easily transferred and utilized in other contexts, making them highly portable.
+Integration with Attention Layers: LoRA matrices are typically incorporated into the attention layers of the original model. Additionally, the adaptation scale parameter allows control over the extent to which the model adjusts to new training data.
+Memory efficiency: LoRA's improved memory efficiency opens up the possibily of running fine-tune tasks on less than 3x the required compute for a native fine-tune.
+
+LoRA hyperparameters
+### LoRA Rank
+This determines the number of rank decomposition matrices. Rank decomposition is applied to weight matrices in order to reduce memory consumption and computational requirements. The original LoRA paper recommends a rank of 8 (r = 8) as the minimum amount. Keep in mind that higher ranks lead to better results and higher compute requirements. The more complex your dataset, the higher your rank will need to be.
+
+To match a full fine-tune, you can set the rank to equal to the model's hidden size. This is, however, not recommended because it's a massive waste of resources. You can find out the model's hidden size by reading through the config.json or by loading the model with Transformers's AutoModel and using the model.config.hidden_size function:
+
+
+from transformers import AutoModelForCausalLM
+model_name = "huggyllama/llama-7b"      # can also be a local directory
+model = AutoModelForCausalLM.from_pretrained(model_name)
+hidden_size = model.config.hidden_size
+print(hidden_size)
+
+### LoRA Alpha
+
+This is the scaling factor for the LoRA, which determines the extent to which the model is adapted towards new training data. The alpha value adjusts the contribution of the update matrices during the train process. Lower values give more weight to the original data and maintain the model's existing knowledge to a greater extent than higher values.
+
+### LoRA Target Modules
+Here you can determine which specific weights and matrices are to be trained. The most basic ones to train are the Query Vectors (e.g. q_proj) and Value Vectors (e.g. v_proj) projection matrices. The names of these matrices will differ from model to model. You can find out the exact names by running the following script:
+
+from transformers import AutoModelForCausalLM
+model_name = "huggyllama/llama-7b"      # can also be a local directory
+model = AutoModelForCausalLM.from_pretrained(model_name)
+layer_names = model.state_dict().keys()
+
+for name in layer_names:
+    print(name)
+
+
+## QLoRA
+
+QLoRA (Quantized Low Rank Adapters) is an efficient finetuning approach that reduces memory usage while maintaining high performance for large language models. It enables the finetuning of a 65B parameter model on a single 48GB GPU, while preserving full 16-bit fine-tuning task performance.
+
+The key innovations of QLoRA include:
+
+Backpropagation of gradients through a frozen, 4-bit quantized pretrained language model into Low Rank Adapters (LoRA).
+Use of a new data type called 4-bit NormalFloat (NF4), which optimally handles normally distributed weights.
+Double quantization to reduce the average memory footprint by quantizing the quantization constants.
+Paged optimizers to effectively manage memory spikes during the finetuning process.
+
+
+
+## Quantization
+
+bitsandbytes is the easiest option for quantizing a model to 8 and 4-bit. 8-bit quantization multiplies outliers in fp16 with non-outliers in int8, converts the non-outlier values back to fp16, and then adds them together to return the weights in fp16. This reduces the degradative effect outlier values have on a model’s performance. 4-bit quantization compresses a model even further
+
+### Compute data type
+To speedup computation, you can change the data type from float32 (the default value) to bf16 using the bnb_4bit_compute_dtype parameter in BitsAndBytesConfig:
+
+### Quant Type
+NF4 is a 4-bit data type from the QLoRA paper, adapted for weights initialized from a normal distribution. You should use NF4 for training 4-bit base models. This can be configured with the bnb_4bit_quant_type parameter in the BitsAndBytesConfig:
+
+### bnb_4bit_use_double_quant
+Nested quantization
+Nested quantization is a technique that can save additional memory at no additional performance cost. This feature performs a second quantization of the already quantized weights to save an additional 0.4 bits/parameter.
+
