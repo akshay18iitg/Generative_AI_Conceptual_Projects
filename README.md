@@ -102,6 +102,8 @@ Sometimes the use case is extremely simple. In this case, the solution could be 
 Single choice routing vs Multiple choice routing
 Depending on the use case, it will make sense for the router to just choose one path and run it. However, in some cases it also can make sense to use more than one choice for answering the same query. To answer a question that spans many topics, the application needs to retrieve information from many data sources. Or the response might be different based on each data source. Then, we can use all of them to answer the question and consolidate them in a single final answer.
 
+## 3. Query Construction
+
 
 
 
