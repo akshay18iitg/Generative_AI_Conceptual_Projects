@@ -29,8 +29,10 @@ Memory - This helps to maintain the context of conversation.
 ![IMG_0012](https://github.com/user-attachments/assets/0875eaae-2681-4d18-b90a-84a6fab212e7)
 
 # Advanced RAG Techniques
+<img width="831" alt="Screen Shot 2025-01-15 at 4 26 11 PM" src="https://github.com/user-attachments/assets/8cf40467-b40f-4e0f-8d0e-8ed7afb91481" />
 
-## 1. Query Contruction
+
+## 1. Query Transformation
 
 Naive RAG typically splits documents into chunks, embeds them, and retrieves chunks with high semantic similarity to a user question. But, this present a few problems: (1) document chunks may contain irrelevant content that degrades retrieval, (2) user questions may be poorly worded for retrieval, and (3) structured queries may need to be generated from the user question (e.g., for querying a vectorstore with metadata filtering or a SQL db).
 Query transformation deals with transformations of the user's question before passing to the embedding model.
@@ -44,6 +46,8 @@ Just embed the follow up question. This means that if the follow up question bui
 Embed the whole conversation (or last k messages). The problem with this is that if a follow up question is completely unrelated to previous conversation, then it may return completely irrelevant results that would distract during generation.
 Use an LLM to do a query transformation!
 ### iii. Multi Query Retrieval - 
+<img width="897" alt="Screen Shot 2025-01-15 at 4 22 23 PM" src="https://github.com/user-attachments/assets/2a3711d7-47bb-43fb-ae08-c60208c05849" />
+
 In this strategy, an LLM is used to generate multiple search queries. These search queries can then be executed in parallel, and the retrieved results passed in altogether. This is really useful when a single question may rely on multiple sub questions.
 For example consider the following question:
 
