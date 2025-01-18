@@ -102,7 +102,160 @@ Sometimes the use case is extremely simple. In this case, the solution could be 
 Single choice routing vs Multiple choice routing
 Depending on the use case, it will make sense for the router to just choose one path and run it. However, in some cases it also can make sense to use more than one choice for answering the same query. To answer a question that spans many topics, the application needs to retrieve information from many data sources. Or the response might be different based on each data source. Then, we can use all of them to answer the question and consolidate them in a single final answer.
 
-## 3. Query Construction
+## 3. Query Construction [[link](https://blog.langchain.dev/query-construction/)]
+
+Query Construction is useful when we have to construct a query specific to a database. This involves converting natural language query to database specific query. The below table mentiones which query is usetable for which database
+
+<img width="658" alt="Screen Shot 2025-01-16 at 8 13 33 PM" src="https://github.com/user-attachments/assets/3064bd79-95a3-43fd-b47d-af6b54bc5da2" />
+
+### i. Text to Metadata Filter
+
+Vectorstores equipped with metadata filtering enable structured queries to filter embedded unstructured documents. The self-query retriever can translate natural language queries into these structured queries using a few steps:
+Data Source Definition: At its core, the self-query retriever is anchored by a clear specification of the relevant metadata files (e.g., in the context of song retrieval, this might be artist, length, and genre).
+User Query Interpretation: Given a natural language question, the self-query retriever will isolate the query (for semantic retrieval) and the filter for metadata filtering. For instance, a query for songs by Taylor Swift or Katy Perry about teenage romance under 3 minutes long in the dance pop genre is decomposed into a filter and query.
+Logical Condition Extraction: The filter itself is crafted from vectorstore defined comparators and operators like eq for equals or lt for less than.
+Structured Request Formation: Finally, the self-query retriever assembles the structured request, bifurcating the semantic search term (query) from the logical conditions (filter) that streamline the document retrieval process.
+
+### ii. Text to SQL
+
+Considerable effort has focused on translating natural language into SQL requests, with a few notable challenges such as:
+
+Hallucination: LLMs are prone to ‘hallucination’ of fictitious tables or fields, thus creating invalid queries. Approaches must ground these LLMs in reality, ensuring they produce valid SQL aligned with the actual database schema. 
+User errors: Text-to-SQL approaches should be robust to user mis-spellings or other irregularities in the user input that could results in invalid queries.
+
+With these challenges in mind a few tricks have emerged:
+
+Database Description: To ground SQL queries, an LLM must be provided with an accurate description of the database. One common text-to-SQL prompt employs an idea reported in several papers: provide the LLM with a CREATE TABLE description for each table, which include column names, their types, etc followed by three example rows in a SELECT statement. 
+Few-shot examples: Feeding the prompt with few-shot examples of question-query matches can improve the query generation accuracy. This can be achieved by simply appending standard static examples in the prompt to guide the agent on how it should build queries based on questions. 
+Error Handling: When faced with errors, data analysts don't give up—they iterate. We can use tools like SQL agents (here) to recover from errors.
+
+### iii. Text to SQL + Semantic
+
+### iv. Text to Cypher
+
+
+## Indexing
+
+### i. Chunking [Link](https://www.youtube.com/watch?v=8OJC21T2SL4)
+Character level Splitting - This splits the text into user defined chunk lengths. It doesn't take into account semantic meaning while chunking. It can chunk words in-between and hence not recommended .
+Recursive Character Splitting - It specify series of seperator which will be used to split the docs.  Default seperators are:
+"\n\n" , "\n", " ", "".  This does not split the words in-between.
+Document Specific Splitting - It splits the documents based on document type like python file, html file, javascript file, etc. It can also extract images and tables from pdf.
+Semantic Chunking - 
+Agentic Splitting - 
+
+### ii. Multi representation  indexing
+Parent Document - In this case, based on the user query, one can retrieve the most related chunk and instead of just passing that chunk to the LLM, pass the parent document that the chunk is a part of. This helps improve the context and hence retrieval. However, what if the parent document is bigger than the context window of the LLM? We can make bigger chunks along with the smaller chunks and pass those instead of the parent to fit the context window
+
+<img width="643" alt="Screen Shot 2025-01-17 at 4 04 27 PM" src="https://github.com/user-attachments/assets/4752e47e-e4b1-49ab-87f2-e7d3ec5bdaee" />
+
+Dense X Retrieval - Dense Retrieval is a new method for contextual retrieval whereby the chunks are not sentences or paragraphs as we saw earlier. Rather, the authors in the below paper introduce something called “proposition”. A proposition effectively encapsulates the following:
+Distinct meaning in the text. The meaning should be captured such that putting all propositions together covers the entire text in terms of semantics. Minimal, ie cannot be further split into smaller propositions. “contextualized and self contained”, meaning each proposition by itself should include all necessary context from the text.
+
+### iii. Specialized Embedding models
+In a RAG application, the responses of a large language model are augmented with relevant, up-to-date context retrieved from a vector store. Typically, similarity search is employed to retrieve such documents by comparing the user query embedding with the documents' embeddings. The effectiveness of retrieval via similarity search heavily depends on the quality of the embeddings used to represent the documents and queries. Consequently, the choice of an embedding model will significantly impact the retrieval precision, which in turn will affect the quality of the LLM responses and the RAG application as a whole. 
+
+#### Fine Tunning
+Bi-Encoders vs Cross-Encoders
+Bi-Encoders produce a vector representation for a given sentence or document chunk; which is usually a single vector of a fixed dimension. Note that there’s an exception to this - ColBERT, but we won’t be covering it in this blog post. In most cases, whether the input text is a single sentence, such as a user question, or a full paragraph, like a document excerpt, as long as the input fits within the embedding model's maximum sequence length, the output will be a fixed-dimension vector. Here’s how it works: the pre-trained encoder model (usually BERT) converts the text into tokens, for each of which it has learned a vector representation during pre-training. It then applies a pooling step to average individual token representations into a single vector representation. 
+CLS pooling: vector representation of the special [CLS] token (designed to model the representation for the sentence that follows it) becomes the representation for the whole sequence
+Mean pooling: the average of token vector representations is returned as the representation for the whole sequence
+Max pooling: the token vector representation with the largest values becomes the representation for the whole sequence
+
+The bi in Bi-Encoder stems from the fact that documents and user queries are processed separately by two independent instances of the same encoder model. The produced vector representations can then be compared using cosine similarity: 
+<img width="711" alt="Screen Shot 2025-01-17 at 6 22 31 PM" src="https://github.com/user-attachments/assets/97b525c3-1a28-40b3-a6c7-6496c9f30d8d" />
+
+
+A Cross-Encoder takes in both text pieces (e.g. a user query and a document) simultaneously. It does not produce a vector representation for each of them, but instead outputs a value between 0 and 1 indicating the similarity of the input pair. 
+<img width="585" alt="Screen Shot 2025-01-17 at 6 23 10 PM" src="https://github.com/user-attachments/assets/f22ccdc9-2b90-44fe-a533-21c2380b018d" />
+
+Pre-training an embedding model
+Although training steps may vary slightly from one model to another, and not all model publishers have shared their training details, the pre-training steps for Bi-Encoder embedding models generally follow a similar pattern.
+The process begins with a pre-trained general-purpose encoder-style model, such as a small, ~100M-parameter pre-trained BERT. Despite the availability of larger, more advanced generative LLMs, this smaller BERT model remains a solid backbone for text embedding models today.
+To fine-tune the pre-trained BERT for information retrieval, a dataset is assembled consisting of text pairs (question/answer, query/document) with a contrastive learning objective that reflects the downstream use of text embeddings. The text pairs can be positive (e.g. a question and an answer to it), and negative (a question and unrelated text). The goal is for the model to learn to bring the embeddings of positive pairs closer together in vector space while pushing the embeddings of negative pairs apart. 
+The training process often has more than one step. Initially, the model is trained on a large corpus of text pairs in a weakly supervised manner. However, to achieve SOTA results on the leaderboards, a second round of contrastive training is often employed. In this second round, the model is further trained on a smaller dataset with high-quality data and particularly challenging examples from academic datasets like MSMARCO, HotpotQA, and NQ. 
+
+
+#### ColBERT
+
+### iv. Hierarchical Indexing
+RAPTOR - The RAPTOR model as proposed by Stanford researchers is based on tree of document summarization at various abstraction levels ie creating a tree by summarizing clusters of text chunks for more accurate retrieval. The text summarization for retrieval augmentation captures a much larger context across different scales encompassing both thematic comprehension and granularity.
+The paper claims significant performance gains by using this method of retrieving with recursive summaries. For example, “On question-answering tasks that involve complex, multi-step reasoning, we show state-of-the-art results; for example, by coupling RAPTOR retrieval with the use of GPT-4, we can improve the best performance on the QuALITY benchmark by 20% in absolute accuracy.”
+<img width="869" alt="Screen Shot 2025-01-17 at 4 09 27 PM" src="https://github.com/user-attachments/assets/c9a4b689-b584-40a4-807d-1b6674dab48d" />
+
+### v. Indexing for faster search in Vector DB
+#### k-nearest neighbours - KNN (K-Nearest Neighbors) indexing is a brute-force technique used in the retrieval stage of RAG models.
+Similarity Measure: A function (e.g., cosine similarity, L2 distance) that determines the “closeness” between two vectors. The retrieval process aims to identify passages/documents whose vector representations are most similar to the query vector.
+Note: Use L2 distance when the magnitude of features matters (Ideal when raw values and their differences are important, like comparing user profiles based on age and income) otherwise use cosine similarity (Ideal when comparing documents based on word topics, regardless of the overall word count).
+Search Process:
+Query Vectorization: The user’s query is transformed into a vector using the same method applied to the corpus.
+KNN Search: It retrieves the k nearest neighbour vectors from the corpus using given similarity metrics. Its time complexity is O(N log k) but using the KD tree for search will reduce the time complexity to O(log N)
+k Value: The number of nearest neighbours to retrieve for each query. A higher k value provides more diverse results, while a lower k value prioritizes the most relevant ones.
+
+#### Inverted File Vector - IVF indexing is an ANN technique used to accelerate the retrieval stage in RAG. It shares some similarities with KNN indexing but operates in a slightly different way.
+
+Core Concepts:
+
+Clustering: The vector space is partitioned into clusters using techniques like k-means clustering. Each cluster has a centroid, which represents the center of that cluster in the vector space.
+Inverted File: An inverted file data structure (Just like a Python dictionary) is created. This file maps each centroid to a list of data point IDs (passages/documents) that belong to the corresponding cluster.
+Search Process:
+
+Nearest Centroid Search: The IVF index efficiently searches for the nearest centroid (the cluster centroid vector most similar to the query vector) based on a similarity measure (often cosine similarity).
+Refined Search: Within the cluster identified by the nearest centroid, a smaller number of nearest neighbours (data points) are retrieved using a more expensive distance metric (like L2 distance). This step refines the search within the most promising cluster.
+
+#### Locality Sensitive Hashing
+LSH indexing serves to expedite the retrieval process. Unlike the previously discussed methods (KNN, IVF), LSH focuses on mapping similar data points to the same “buckets” with a high probability, even though it might not guarantee the closest neighbours.
+
+Core Concepts:
+
+Hash Functions: LSH utilizes a family of hash functions that map similar data points (represented as vectors) to the same “hash bucket” with a high probability. However, dissimilar data points might also collide in the same bucket.
+Similarity Measure: A function (like cosine similarity) determines the “closeness” between two vectors. The LSH functions are designed to map similar vectors (based on the similarity measure) to the same bucket with a higher probability compared to dissimilar vectors.
+Multiple Hash Tables: LSH often uses multiple hash tables, each employing a different LSH function. This approach increases the likelihood of finding similar items even if they collide in one table, as they might be separated in another.
+Search Process Steps:
+
+LSH Hashing: The query vector is hashed using each hash function in the LSH family, resulting in a set of hash codes (bucket indices) for each table.
+Candidate Retrieval: Based on the generated hash codes, documents that share at least one hash code (i.e., potentially similar based on the LSH function) with the query in any of the tables are considered candidate matches.
+
+#### Random Projection - 
+RP indexing projects high-dimensional data (text vectors) into a lower-dimensional space while attempting to preserve similarity relationships.
+
+Core Concepts:
+
+Dimensionality Reduction: RP aims to reduce the dimensionality of textual data represented as vectors. High-dimensional vectors can be computationally expensive to compare.
+Random Projection Matrix: A random matrix is generated, with each element containing random values (often following a Gaussian distribution). The size of this matrix determines the target lower dimension.
+Similarity Preservation: The goal is to project data points (vectors) onto a lower-dimensional space in a way that retains their relative similarity as much as possible in the high-dimensional space (Binary form). Just like SVM, when the hyperplane normal vector produces a +ve dot-product with another vector, we encode it as 1 else 0. This allows for efficient search in the lower-dimensional space while still capturing relevant connections.
+
+Search Process Steps:
+
+Random Projection: Both the query vector and the document vectors in the corpus are projected onto the lower-dimensional space using the pre-computed random projection matrix. This results in lower-dimensional representations of the data (binary vector).
+Search in Lower Dimension: Efficient search algorithms (Hamming distance to find the closest match) are used in the lower-dimensional space to find documents whose projected vectors are most similar to the projected query vector. This search can be faster due to the reduced dimensionality.
+
+#### Product Quantization - PQ indexing is used to accelerate the search process and reduce memory footprint.
+
+Core Concepts:
+
+Vector Decomposition: High-dimensional query and document vectors are decomposed into smaller sub-vectors representing lower-dimensional subspaces. This effectively breaks down the complex vector into simpler pieces.
+Codebook Creation: For each subspace, a codebook is created using techniques like k-means clustering. This codebook contains a set of representative centroids, each representing a group of similar sub-vectors.
+Encoding: Each sub-vector is then “encoded” by identifying the closest centroid in its corresponding codebook. This encoding process assigns an index to the sub-vector based on its closest centroid.
+
+Search Process Steps:
+
+Vector Decomposition: The query vector is decomposed into sub-vectors according to the pre-defined subspaces.
+Subspace Encoding: Each sub-vector is encoded by finding its closest centroid in the corresponding codebook, resulting in a set of indices representing the encoded sub-vectors.
+Approximate Distance Calculation: Using the encoded sub-vector indices from both the query and document vectors, an efficient distance metric is applied to estimate the similarity between the two vectors.
+
+#### Hierarchical Navigable Small World
+HNSW excels at finding data points in a large collection that are most similar to a given query, but it might not pinpoint the absolute exact closest neighbour. This trade-off between perfect accuracy and retrieval speed makes HNSW ideal for applications like RAG indexing, where returning highly relevant information quickly is crucial.
+
+Core Concepts:
+
+Navigable Small World Graphs: HNSW builds upon the concept of navigable small world graphs. Imagine a social network where everyone is connected to a few close friends but also has a few random connections to people further away in the network. This allows for efficient navigation — you can usually reach any person within a small number of hops by strategically following close and distant connections. HNSW translates this concept into a graph structure where data points (vectors) are nodes, and connections represent their similarity.
+Skip list: Similar to the Linked list data structure, HNSW introduces a hierarchical structure to the graph. This means there are multiple layers, each with a different “grain size” for connections(Skip Connection). The top layer has far fewer connections but spans larger distances in the vector space, allowing for quick exploration. Lower layers have more connections but focus on finer-grained similarity. This hierarchy enables efficient search — the algorithm starts at the top layer for a broad initial search and then progressively refines in lower layers to find the nearest neighbours. But for this, we need to build a sorted skip list.
+Search Process:
+
+Top-Layer Exploration: HNSW leverages the long-distance connections in the top layer to identify a small set of potentially promising nodes (candidate nearest neighbours).
+Hierarchical Descent: The algorithm iteratively explores these candidates in lower layers, using shorter-distance connections to refine the search and get closer to the true nearest neighbours.
+Selection: Throughout the search, a pre-defined number of nearest neighbours are selected based on a distance threshold or other criteria.
 
 
 
